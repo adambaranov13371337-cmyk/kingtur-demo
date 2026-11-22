@@ -11,16 +11,58 @@
     const images = [...cover.querySelectorAll('.cover-image')];
     const caption = cover.querySelector('.place-caption');
     selector.hidden = false;
+    const track = cover.closest('.cover-track');
+    let active = -1;
+    let pending = 0;
+    let inset = 0;
+
+    function selectCity(index) {
+      if (active === index) return;
+      active = index;
+      buttons.forEach((button, i) => {
+        button.setAttribute('aria-pressed', String(i === index));
+        images[i].classList.toggle('is-current', i === index);
+        images[i].setAttribute('aria-hidden', String(i !== index));
+      });
+      caption.textContent = buttons[index].dataset.caption;
+    }
+
+    function travel() {
+      return track ? track.offsetHeight - cover.offsetHeight : 0;
+    }
+    function syncCity() {
+      pending = 0;
+      const length = travel();
+      if (reduced.matches || length < 1) return;
+      const progress = bound((inset - track.getBoundingClientRect().top) / length, 1);
+      selectCity(Math.min(buttons.length - 1, Math.floor(progress * buttons.length)));
+    }
+    function queueCity() {
+      if (!pending) pending = requestAnimationFrame(syncCity);
+    }
+    function sizeCover() {
+      inset = Math.min(0, document.documentElement.clientHeight - cover.offsetHeight);
+      cover.style.setProperty('--cover-inset', inset + 'px');
+      queueCity();
+    }
     buttons.forEach((button, index) => {
       button.addEventListener('click', () => {
-        buttons.forEach((item, i) => {
-          item.setAttribute('aria-pressed', String(i === index));
-          images[i].classList.toggle('is-current', i === index);
-          images[i].setAttribute('aria-hidden', String(i !== index));
-        });
-        caption.textContent = button.dataset.caption;
+        if (index === active) return;
+        stopScroll();
+        const length = travel();
+        if (!reduced.matches && length > 0) {
+          const start = scrollY + track.getBoundingClientRect().top - inset;
+          window.scrollTo({top:start + (index + .5) / buttons.length * length, behavior:'instant'});
+        }
+        selectCity(index);
       });
     });
+    selectCity(0);
+    new ResizeObserver(sizeCover).observe(cover);
+    window.addEventListener('scroll', queueCity, {passive:true});
+    window.addEventListener('resize', sizeCover);
+    window.addEventListener('pageshow', queueCity);
+    reduced.addEventListener('change', sizeCover);
   }
 
   const story = document.querySelector('.service-story');
